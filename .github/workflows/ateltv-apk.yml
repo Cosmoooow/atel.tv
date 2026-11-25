@@ -35,6 +35,9 @@ jobs:
         env:
           KS_B64: ${{ secrets.ATELTV_KEYSTORE_B64 }}
           KS_PASS: ${{ secrets.ATELTV_KEYSTORE_PASS }}
+          # The atel server's address: the repository variable ATELTV_SERVER when set, else the PC's on the home
+          # network (a private address, meaningless outside it). Plain http only to a private address (lan_server).
+          ATEL_SERVER: ${{ vars.ATELTV_SERVER || 'http://192.168.1.11:4318' }}
         run: |
           if [ -n "$KS_B64" ]; then
             printf '%s' "$KS_B64" | base64 -d > "$RUNNER_TEMP/ateltv.keystore"
