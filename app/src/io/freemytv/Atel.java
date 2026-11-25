@@ -29,7 +29,7 @@ import java.util.concurrent.Executors;
 
 /**
  * atel (this fork): today's agenda and reminders from the atel home server's read-only device API
- * (`GET <atel_server>/device/v1/agenda?days=2`, atel/API-APPAREILS.md), for the "Aujourd'hui" card next to the
+ * (`GET <atel_server>/device/v1/agenda?days=7`, atel/API-APPAREILS.md), for the "Aujourd'hui" card next to the
  * weather. The TV's token comes from Secrets (tools/send_key.py), never from the APK. Without a server in
  * config.properties the card shows sample data; with one, the last good answer is kept on disk so the card has
  * something after a restart while the server (a Mac that sleeps, during development) is away. Read only: the TV
@@ -82,8 +82,15 @@ final class Atel {
         /** sub: the place, or for a reminder when it's due. badge: when, for the first line ("in 1 h 50"). */
         final String time, title, sub, badge;
         final boolean check, strong, tomorrow;
+        /** Not today: the day after tomorrow or later in the week (its date then stands in the time column). */
+        final String day;
 
         Row(String time, String title, String sub, String badge, boolean check, boolean strong, boolean tomorrow) {
+            this(time, title, sub, badge, check, strong, tomorrow, "");
+        }
+
+        Row(String time, String title, String sub, String badge, boolean check, boolean strong, boolean tomorrow, String day) {
+            this.day = day;
             this.time = time;
             this.title = title;
             this.sub = sub;
@@ -93,6 +100,9 @@ final class Atel {
             this.tomorrow = tomorrow;
         }
     }
+
+    /** How far ahead the TV looks: a week, so the next appointment shows even when the next two days are empty. */
+    static final int DAYS = 7;
 
     private static volatile Agenda agenda;
     private static volatile long fetchedAt, triedAt;
@@ -145,7 +155,7 @@ final class Atel {
                 }
                 String token = Secrets.get(c, Secrets.ATEL_TOKEN);
                 try {
-                    String body = request(token, "/device/v1/agenda?days=2");
+                    String body = request(token, "/device/v1/agenda?days=" + DAYS);
                     agenda = parse(body);
                     fetchedAt = System.currentTimeMillis();
                     writeCache(c, body);
@@ -172,11 +182,21 @@ final class Atel {
      */
     static List<Row> rows(Agenda a, long now, int max) {
         List<Row> out = new ArrayList<>();
-        long today = startOfDay(now, 0), tomorrow = startOfDay(now, 1), after = startOfDay(now, 2);
+        long today = startOfDay(now, 0), tomorrow = startOfDay(now, 1), after = startOfDay(now, 2), week = startOfDay(now, DAYS);
         for (Item e : a.events) {
             if (out.size() >= max) break;
             if (e.end > 0 ? e.end <= now : e.start < today) continue;
-            if (e.start >= after) continue;
+            if (e.start >= week) continue;
+            if (e.start >= after) {
+                // Later in the week: the date in the time column, the weekday as the badge, the hour before the place.
+                Date d = new Date(e.start);
+                String hour = e.allDay ? "" : Ui.time(e.start);
+                String sub = hour.isEmpty() ? e.place : e.place.isEmpty() ? hour : hour + " · " + e.place;
+                out.add(new Row(new SimpleDateFormat("d MMM", Ui.locale()).format(d), e.title, sub,
+                        new SimpleDateFormat("EEEE", Ui.locale()).format(d), false, false, true,
+                        new SimpleDateFormat("EEEE d MMMM", Ui.locale()).format(d)));
+                continue;
+            }
             boolean isTomorrow = e.start >= tomorrow;
             String time = e.allDay ? Ui.tr("atel|All day") : Ui.time(e.start);
             String badge;
