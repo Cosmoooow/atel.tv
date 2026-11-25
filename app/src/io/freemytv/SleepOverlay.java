@@ -72,7 +72,7 @@ public class SleepOverlay extends Service {
 
     private static final java.util.concurrent.atomic.AtomicBoolean allowing = new java.util.concurrent.atomic.AtomicBoolean();
 
-    private static void allow(Context c) {
+    static void allow(Context c) {   // atel: AtelReminder asks too
         if (!allowing.compareAndSet(false, true)) return;   // one at a time, however fast the timer is stepped
         new Thread(() -> {
             try (Adb adb = Adb.connect(c, 10_000, null)) {
