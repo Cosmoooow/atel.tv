@@ -83,6 +83,9 @@ final class Trakt {
 
     /** The person put their own Trakt API app in config.properties (and this is :home: see above). */
     static boolean available() {
+        // atel: Trakt is off for good (Téo's sorting, 2026-11-25), whatever config.properties says: no row, no call to
+        // api.trakt.tv. The code stays only because the hidden picks (Recs) are woven with it.
+        if (true) return false;
         return !Config.TRAKT_CLIENT_ID.trim().isEmpty() && inHome();
     }
 
