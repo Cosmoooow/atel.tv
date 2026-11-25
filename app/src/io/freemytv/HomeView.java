@@ -4159,7 +4159,12 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     /** The clock, the date and the weather: nothing at the top, or picks without a TMDB key. */
     private boolean clockMode() {
-        return !picksMode() && !continueMode() && !atelMode();
+        return !picksMode() && !continueMode() && !atelShown();
+    }
+
+    /** atel at the top, and its server answering: else the clock takes its place (Atel.online). */
+    private boolean atelShown() {
+        return atelMode() && Atel.online(System.currentTimeMillis());
     }
 
     private boolean atelMode() {
@@ -4716,7 +4721,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             if (HomeData.coinCount() > 0 || playingTab != null) drawQuotes(c);
             return;
         }
-        if (atelMode()) {
+        if (atelShown()) {
             drawAtelTop(c);
             if (HomeData.coinCount() > 0 || playingTab != null) drawQuotes(c);
             return;
@@ -5102,7 +5107,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         int color = Ui.alpha(tone(L_INK, 0xEBFFFFFF), 0.85f);
         float x = MARGIN * k;
         // The top title ("For You", or "Continue Watching") is on this line too: the icons start after it, not on it.
-        if (atelMode()) x = Math.max(x, titleRight + gap);
+        if (atelShown()) x = Math.max(x, titleRight + gap);
         else if (!clockMode()) x += lTitle.measureText(picksMode() ? Ui.tr("For You") : Ui.tr("Continue Watching")) + gap;
         if (network != 0) x = drawStatusIcon(c, network == 2 ? "ethernet" : "wifi", x, height, gap, color);
         if (bluetoothConnected) x = drawStatusIcon(c, "bluetooth", x, height, gap, color);

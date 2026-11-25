@@ -42,6 +42,7 @@ final class Atel {
     /** How often the agenda is fetched again while the home screen shows (and at most this often on resume). */
     private static final long EVERY_MS = 5 * 60_000L;
     private static final long RETRY_MS = 60_000L;
+    private static final long STALE_MS = 15 * 60_000L;   // three missed refreshes
     private static final ExecutorService LOADER = Executors.newSingleThreadExecutor();
 
     /** An appointment (start set) or a reminder (due set, start 0). Times in ms since the epoch. */
@@ -101,6 +102,16 @@ final class Atel {
         return !Config.ATEL_SERVER.isEmpty();
     }
 
+    /**
+     * Whether the server answered lately: the home screen shows the agenda only then, and the clock otherwise (no
+     * server set, not reached since the app started, or no answer for STALE_MS). The disk cache alone doesn't count:
+     * an old agenda could show what was moved or cancelled since.
+     */
+    static boolean online(long now) {
+        long at = fetchedAt;
+        return configured() && at > 0 && now - at < STALE_MS;
+    }
+
     /** What the card shows now: the server's last answer, or the sample. Never null. */
     static Agenda now() {
         Agenda a = agenda;
@@ -126,6 +137,9 @@ final class Atel {
                     String cached = readCache(c);
                     if (cached != null) {
                         agenda = parse(cached);
+                        // A copy saved minutes ago (the screen came back after a restart) counts as an answer.
+                        long saved = cache(c).lastModified();
+                        if (saved <= now && now - saved < STALE_MS) fetchedAt = saved;
                         fresh = true;
                     }
                 }
@@ -138,6 +152,7 @@ final class Atel {
                     fresh = true;
                 } catch (Exception e) {
                     Log.i(TAG, "atel: agenda not fetched (" + e.getMessage() + ")");   // never the token
+                    fresh = true;   // the screen checks online() again
                 }
                 if (fresh && changed != null) changed.run();
             } catch (Throwable t) {
