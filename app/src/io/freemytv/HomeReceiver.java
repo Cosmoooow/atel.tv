@@ -14,13 +14,17 @@ public class HomeReceiver extends BroadcastReceiver {
         if (Intent.ACTION_BOOT_COMPLETED.equals(action)) {
             HomeMode.bootCheck(context);
             Updates.schedule(context);
+            later(() -> AtelReminder.restore(context));   // atel: the next appointment's reminder
         } else if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) {
             HomeMode.verify(context);   // app updated: complete Free My TV mode if something is missing
             HomeMode.ensureRemoteService(context, 3_000);
             Updates.schedule(context);
             later(() -> Updates.cleanUp(context));
+            later(() -> AtelReminder.restore(context));
         } else if (Updates.ACTION.equals(action)) {
             later(() -> Updates.status(context, intent));
+        } else if (AtelReminder.ACTION.equals(action)) {
+            later(() -> AtelReminder.fire(context));
         } else if (SleepTimer.ACTION.equals(action)) {
             long setAt = intent.getLongExtra("setAt", 0);
             later(() -> SleepTimer.fire(context, setAt));   // ADB is network

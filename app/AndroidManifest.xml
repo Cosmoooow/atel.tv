@@ -262,6 +262,18 @@
             android:process=":sleep"
             android:exported="false" />
 
+        <!-- atel: an appointment's reminder over any app, 30 minutes before (AtelReminder); alone like the pill above. -->
+        <service
+            android:name=".AtelReminderOverlay"
+            android:process=":reminder"
+            android:exported="false" />
+
+        <!-- atel: the agenda every 15 minutes while another app is in front, for the reminders. -->
+        <service
+            android:name=".AtelJob"
+            android:permission="android.permission.BIND_JOB_SERVICE"
+            android:exported="false" />
+
         <!-- Lets the home screen and the screensaver read what apps are playing (their media sessions); it unbinds itself
              at once, so no process stays up for it. -->
         <service

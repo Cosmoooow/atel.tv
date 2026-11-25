@@ -153,17 +153,8 @@ final class Atel {
                         fresh = true;
                     }
                 }
-                String token = Secrets.get(c, Secrets.ATEL_TOKEN);
-                try {
-                    String body = request(token, "/device/v1/agenda?days=" + DAYS);
-                    agenda = parse(body);
-                    fetchedAt = System.currentTimeMillis();
-                    writeCache(c, body);
-                    fresh = true;
-                } catch (Exception e) {
-                    Log.i(TAG, "atel: agenda not fetched (" + e.getMessage() + ")");   // never the token
-                    fresh = true;   // the screen checks online() again
-                }
+                fetchNow(c);
+                fresh = true;   // new, or the screen checks online() again
                 if (fresh && changed != null) changed.run();
             } catch (Throwable t) {
                 // :home's watchdog counts a crash here as a home screen crash: nothing may escape.
@@ -172,6 +163,53 @@ final class Atel {
                 loading = false;
             }
         });
+    }
+
+    /**
+     * Fetches the agenda now, on the caller's thread (never the UI's): keeps it on disk for the other processes (the
+     * screensaver, the reminders, the background job) and schedules the next reminder from it. Null when the server
+     * didn't answer. Also makes sure the background job runs, so reminders come while another app is in front.
+     */
+    static Agenda fetchNow(Context c) {
+        if (!configured()) return null;
+        AtelJob.ensure(c);
+        try {
+            String body = request(Secrets.get(c, Secrets.ATEL_TOKEN), "/device/v1/agenda?days=" + DAYS);
+            Agenda a = parse(body);
+            agenda = a;
+            fetchedAt = System.currentTimeMillis();
+            writeCache(c, body);
+            AtelReminder.schedule(c, a);
+            return a;
+        } catch (Exception e) {
+            Log.i(TAG, "atel: agenda not fetched (" + e.getMessage() + ")");   // never the token
+            return null;
+        }
+    }
+
+    /** The last answer kept on disk (any process), or null. */
+    static Agenda cached(Context c) {
+        String body = readCache(c);
+        if (body == null) return null;
+        try {
+            return parse(body);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * The screensaver's line: the next appointment today or tomorrow (not over yet), or null. Reminders without an hour
+     * don't count: the line is for where to be.
+     */
+    static Item next(Agenda a, long now) {
+        long today = startOfDay(now, 0), after = startOfDay(now, 2);
+        for (Item e : a.events) {
+            if (e.end > 0 ? e.end <= now : e.start < today) continue;
+            if (e.allDay && e.start < today) continue;
+            return e.start < after ? e : null;
+        }
+        return null;
     }
 
     // MARK: - The card's lines

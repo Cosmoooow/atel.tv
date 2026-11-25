@@ -140,6 +140,14 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
     private Paint datePaint, clockPaint, weatherPaint, weatherDim, quotePaint, stalePaint;
     private Paint cornerDate, cornerQuote, cornerStale, cornerClock, labelPaint, metaPaint, hintPaint;
     private TextPaint titlePaint;
+    // atel: the next appointment, under the clock ("Tomorrow  09:00  Dentist, Lyon 3e"); made once a minute.
+    private String nextDay = "", nextHour = "", nextText = "";
+    private Paint nextDayPaint, nextHourPaint, nextTextPaint, nextPill;
+    private final RectF nextBox = new RectF();
+    private final Runnable atelChanged = () -> post(() -> {
+        minute = -1;
+        invalidate();
+    });
 
     private final Runnable tick = new Runnable() {
         @Override public void run() {
@@ -148,6 +156,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
             data.refreshIfStale();
             recs.refreshIfStale();
             recs.prefetchAll();
+            Atel.refresh(getContext(), false, atelChanged);
             dirty = true;
             chromeDirty = true;
             prepareNext();
@@ -191,6 +200,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
         data.refreshIfStale();
         recs.refreshIfStale();
         recs.prefetchAll();
+        Atel.refresh(getContext(), false, atelChanged);
         Photos.importInbox(getContext(), () -> { if (running) prepareNext(); });
         prepareNext();
         handler.postDelayed(tick, 60_000);
@@ -268,9 +278,15 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
         metaPaint = Ui.text(Ui.medium, 29 * k, 0xC7FFFFFF);
         hintPaint = Ui.text(Ui.regular, 24 * k, 0x99FFFFFF);
         metaPaint.setLetterSpacing(0.014f);
+        nextDayPaint = Ui.text(Ui.medium, 30 * k, 0xB8FFFFFF);
+        nextHourPaint = Ui.numbers(Ui.semibold, 28 * k, 0xFF2A2112);
+        nextTextPaint = Ui.text(Ui.semibold, 30 * k, 0xEBFFFFFF);
+        nextPill = new Paint(Paint.ANTI_ALIAS_FLAG);
+        nextPill.setColor(0xFFF2C46D);
         Symbols.warmWeather(getContext(), 30 * k);   // the corner's
         Symbols.warmWeather(getContext(), 32 * k);   // under the clock
-        for (Paint p : new Paint[] {cornerDate, cornerQuote, cornerStale, cornerClock, labelPaint, titlePaint, metaPaint, barPaint}) {
+        for (Paint p : new Paint[] {cornerDate, cornerQuote, cornerStale, cornerClock, labelPaint, titlePaint, metaPaint, barPaint,
+                nextDayPaint, nextTextPaint}) {
             p.setShadowLayer(18 * k, 0, 2 * k, 0x66000000);
         }
         fitPlaying();
@@ -461,6 +477,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
             minute = now / 60_000;
             clock = Ui.clock(now);
             date = Ui.date(now);
+            nextLine(now);
             dirty = true;
             chromeDirty = true;
         }
@@ -621,10 +638,50 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
             }
             String stale = HomeData.staleness(data.pricesAt, 5 * 60_000L);
             if (!stale.isEmpty() && n > 0) c.drawText(stale, right - total - 24 * k - cornerStale.measureText(stale), base, cornerStale);
+            if (playingCorner != null || n > 0) base += 56 * k;
+            drawNext(c, right - nextWidth(), base + 10 * k);
         } finally {
             chrome.endRecording();
         }
         chromeDirty = false;
+    }
+
+    // MARK: - atel: the next appointment
+
+    /** Once a minute (and when the agenda changes): the next appointment today or tomorrow, or nothing. */
+    private void nextLine(long now) {
+        nextDay = nextHour = nextText = "";
+        if (!Atel.online(now)) return;   // as on the home screen: nothing that may have moved since
+        Atel.Item e = Atel.next(Atel.now(), now);
+        if (e == null) return;
+        String day = e.start >= Atel.startOfDay(now, 1) ? Ui.tr("atel|Tomorrow") : Ui.tr("today");
+        nextDay = day.isEmpty() ? "" : day.substring(0, 1).toUpperCase(Ui.locale()) + day.substring(1);
+        nextHour = e.allDay ? "" : Ui.time(e.start);
+        String text = e.place.isEmpty() ? e.title : e.title + ", " + e.place;
+        fit.set(nextTextPaint);
+        nextText = TextUtils.ellipsize(text, fit, 900 * k, TextUtils.TruncateAt.END).toString();
+    }
+
+    private float nextWidth() {
+        if (nextText.isEmpty()) return 0;
+        float wd = nextDayPaint.measureText(nextDay) + 18 * k + nextTextPaint.measureText(nextText);
+        if (!nextHour.isEmpty()) wd += nextHourPaint.measureText(nextHour) + 24 * k + 18 * k;
+        return wd;
+    }
+
+    /** "Tomorrow" dimmed, the hour on an amber pill (atel's mark), then the title and the place. */
+    private void drawNext(Canvas c, float x, float base) {
+        if (nextText.isEmpty()) return;
+        c.drawText(nextDay, x, base, nextDayPaint);
+        x += nextDayPaint.measureText(nextDay) + 18 * k;
+        if (!nextHour.isEmpty()) {
+            float hw = nextHourPaint.measureText(nextHour), cap = Ui.cap(nextTextPaint);
+            nextBox.set(x, base - cap - 10 * k, x + hw + 24 * k, base + 10 * k);
+            c.drawRoundRect(nextBox, 14 * k, 14 * k, nextPill);
+            c.drawText(nextHour, x + 12 * k, base, nextHourPaint);
+            x += hw + 24 * k + 18 * k;
+        }
+        c.drawText(nextText, x, base, nextTextPaint);
     }
 
     private void drawGlass(Canvas c, float alpha, float e) {
@@ -870,6 +927,8 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
             x += weatherPaint.measureText(now) + 18 * k;
             c.drawText(range, x, base, weatherDim);
         }
+
+        drawNext(c, cx - nextWidth() / 2, clockBase + 170 * k);
 
         // Prices near the bottom edge: small white logo + value, all four on one line.
         float cap = Ui.cap(quotePaint), spacing = 56 * k, gap = 10 * k;
