@@ -543,7 +543,7 @@ public class SettingsActivity extends Activity {
             switch (screen) {
                 case MAIN: return 9;
                 case HOME_CHOICE: return 2;
-                case HOME_SETTINGS: return Math.min(SETTINGS_VISIBLE, settingLabels().length);
+                case HOME_SETTINGS: return Math.min(SETTINGS_VISIBLE, settingCount());
                 case PICKER: return Math.min(PICK_VISIBLE, pickLabels.size());
                 case SHELF_EDIT: return Math.min(PICK_VISIBLE, shelfRows.size());
                 case POWER: return powerRows().length;
@@ -653,9 +653,8 @@ public class SettingsActivity extends Activity {
                 c.restore();
                 y += errorLayout.getLineBaseline(errorLayout.getLineCount() - 1) - errorLayout.getLineBaseline(0) + 46 * k;
             }
-            y = drawComparison(c, y);
-            y = drawRecs(c, y + 26 * k);
-            drawNotices(c, y + 40 * k);
+            // atel: no measures table nor TMDB status (hidden with the picks); the notices only.
+            drawNotices(c, y);
         }
 
         /** Home screen picks: status, and the credit TMDB asks for. */
@@ -988,9 +987,12 @@ public class SettingsActivity extends Activity {
          *  Watching's apps, watch from the screensaver, Android apps, status icons, Recent Apps, at power-on, Live TV button, weather, city, forecast,
          *  now playing, Home Assistant (only on builds with its address), quotes, one row per coin, then the TMDB and Watchmode keys and
          *  updates (the last row). */
-        private static final int CLOCK_ROW = 3, PHOTOS_ROW = 4, TOP_ROW = 6, PICKS_ROW = 7, WATCH_ROW = 8,
-                SAVER_ROW = 9, ANDROID_APPS_ROW = 10, STATUS_ICONS_ROW = 11, RECENTS_ROW = 12, POWER_ON_ROW = 13,
-                LIVE_BUTTON_ROW = 14, WEATHER_ROW = 15, CITY_ROW = 16, FORECAST_ROW = 17, PLAYING_ROW = 18,
+        // atel: the rows Téo kept come first and only they are shown (SHOWN_ROWS); the ones he hid (picks, the
+        // screensaver's picks, Recent Apps, Now Playing, Home Assistant, the quotes and their coins, the TMDB and
+        // Watchmode keys, Updates) stay after them, out of reach, so the code stays Free My TV's.
+        private static final int CLOCK_ROW = 3, PHOTOS_ROW = 4, TOP_ROW = 6, WATCH_ROW = 7, ANDROID_APPS_ROW = 8,
+                STATUS_ICONS_ROW = 9, POWER_ON_ROW = 10, LIVE_BUTTON_ROW = 11, WEATHER_ROW = 12, CITY_ROW = 13,
+                FORECAST_ROW = 14, SHOWN_ROWS = 15, PICKS_ROW = 15, SAVER_ROW = 16, RECENTS_ROW = 17, PLAYING_ROW = 18,
                 HOME_ROW = Config.HOME_ASSISTANT ? 19 : -1, QUOTES_ROW = Config.HOME_ASSISTANT ? 20 : 19, COIN_ROWS = QUOTES_ROW + 1;
         /** No "home" on Xiaomi TVs: their remote sends one Home press as a burst of presses (HomeView.BURST_MS). */
         private static final String[] RECENTS = RemoteKeys.XIAOMI ? new String[] {"off", "drawer"}
@@ -1011,17 +1013,18 @@ public class SettingsActivity extends Activity {
             l.add(Ui.tr("My Photos"));
             l.add(Ui.tr("Navigation sounds"));
             l.add(Ui.tr("Top of the screen"));
-            l.add(Ui.tr("Picks"));
             l.add(Ui.tr("Continue Watching apps"));
-            l.add(Ui.tr("Watch from the screensaver"));
             l.add(Ui.tr("Android apps"));
             l.add(Ui.tr("Status icons"));   // before the weather widget: City and Forecast are the widget's
-            l.add(Ui.tr("Recent Apps"));
             l.add(Ui.tr("At power-on"));
             l.add(Ui.tr("Live TV button"));
             l.add(Ui.tr("Weather widget"));
             l.add(Ui.tr("City"));
             l.add(Ui.tr("Forecast"));
+            // atel: hidden from here on (SHOWN_ROWS).
+            l.add(Ui.tr("Picks"));
+            l.add(Ui.tr("Watch from the screensaver"));
+            l.add(Ui.tr("Recent Apps"));
             l.add(Ui.tr("Now Playing widget"));
             if (HOME_ROW >= 0) l.add("Home Assistant");
             l.add(Ui.tr("Quotes widget"));
@@ -1033,6 +1036,11 @@ public class SettingsActivity extends Activity {
             l.add(Ui.tr("Watchmode key"));
             l.add(Ui.tr("Updates"));
             return l.toArray(new String[0]);
+        }
+
+        /** How many rows Home Settings shows: the ones atel keeps (SHOWN_ROWS). */
+        private int settingCount() {
+            return Math.min(SHOWN_ROWS, settingLabels().length);
         }
 
         /** The Updates row: the last one, after the coins and the keys. */
@@ -1656,7 +1664,7 @@ public class SettingsActivity extends Activity {
          */
         private void showSettingsRow(int row) {
             screen = HOME_SETTINGS;
-            int rows = settingLabels().length, visible = Math.min(SETTINGS_VISIBLE, rows);
+            int rows = settingCount(), visible = Math.min(SETTINGS_VISIBLE, rows);
             pickScroll = row < visible ? 0 : Math.max(0, Math.min(row - 3, rows - visible));
             focus = row - pickScroll;
         }
@@ -2014,7 +2022,7 @@ public class SettingsActivity extends Activity {
 
         private int listSize() {
             if (screen == WATCH_APPS) return watchApps == null ? 0 : watchApps.size() + (watchHiddenCount > 0 ? 1 : 0);
-            return screen == SHELF_EDIT ? shelfRows.size() : screen == HOME_SETTINGS ? settingLabels().length : screen == PICK_FROM ? services.size() : pickLabels.size();
+            return screen == SHELF_EDIT ? shelfRows.size() : screen == HOME_SETTINGS ? settingCount() : screen == PICK_FROM ? services.size() : pickLabels.size();
         }
 
         // MARK: - Continue Watching apps

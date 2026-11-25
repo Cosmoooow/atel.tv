@@ -291,7 +291,7 @@ final class Prefs {
     static void setTheme(String v) { put("theme", v); }
 
     /** Wi-Fi/Ethernet, Bluetooth and USB icons at the top-left of the home screen. */
-    static boolean statusIcons() { return sp().getBoolean("statusicons", false); }
+    static boolean statusIcons() { return sp().getBoolean("statusicons", true); }   // atel: on by default
     static void setStatusIcons(boolean on) { put("statusicons", on); }
 
     // MARK: - City
@@ -310,7 +310,7 @@ final class Prefs {
     static void setSounds(boolean on) { put("sounds", on); }
 
     /** OK on the screensaver opens the title it shows, in its app; any other key only closes it. Off: any key closes it. */
-    static boolean saverWatch() { return sp().getBoolean("saverWatch", false); }
+    static boolean saverWatch() { return false; }   // atel: hidden with the picks
     static void setSaverWatch(boolean on) { put("saverWatch", on); }
 
     // MARK: - Top of the home screen
@@ -318,12 +318,12 @@ final class Prefs {
     static final String TOP_PICKS = "picks", TOP_CONTINUE = "continue", TOP_NONE = "none";
     /** atel: the weather and today's agenda (Atel) side by side, in glass cards. The fork's default. */
     static final String TOP_ATEL = "atel";
-    static final String[] TOP_CONTENT = {TOP_ATEL, TOP_PICKS, TOP_CONTINUE, TOP_NONE};
+    static final String[] TOP_CONTENT = {TOP_ATEL, TOP_CONTINUE, TOP_NONE};   // atel: no picks (hidden)
 
     /** What the cards under the title show: the recommendations (TMDB), what you were watching in your apps, or nothing. */
     static String topContent() {
         String v = sp().getString("topContent", TOP_ATEL);
-        return v.equals(TOP_CONTINUE) || v.equals(TOP_NONE) || v.equals(TOP_PICKS) ? v : TOP_ATEL;
+        return v.equals(TOP_CONTINUE) || v.equals(TOP_NONE) ? v : TOP_ATEL;   // atel: no picks (hidden)
     }
 
     static void setTopContent(String v) { put("topContent", v); }
@@ -339,8 +339,7 @@ final class Prefs {
     /** Recent Apps: "off" (the default: Android manages memory on its own), "drawer" (a shortcut in the bottom drawer and the
      *  remote's app-switch key) or "home" (those, and pressing Home twice). The top button is its own choice (Top Buttons). */
     static String recents() {
-        String v = sp().getString("recents", "off");
-        return v.equals("drawer") || v.equals("home") ? v : "off";
+        return "off";   // atel: Recent Apps is hidden
     }
 
     static void setRecents(String v) { put("recents", v); }
@@ -371,17 +370,17 @@ final class Prefs {
     static String forecast() { return "days".equals(sp().getString("forecast", "hours")) ? "days" : "hours"; }
     static void setForecast(String v) { put("forecast", v); }
 
-    static boolean nowPlaying() { return sp().getBoolean("nowPlaying", false); }
+    static boolean nowPlaying() { return false; }   // atel: hidden (the listener is taken back)
     static void setNowPlaying(boolean on) {   // committed: the main process reads it right away to allow the listener
         sp().edit().putBoolean("nowPlaying", on).commit();
         version++;
     }
 
     /** Home Assistant's tiles in the drawer (HomeAssistant): off until turned on here, even with a server configured. */
-    static boolean homeAssistant() { return sp().getBoolean("homeAssistant", false); }
+    static boolean homeAssistant() { return false; }   // atel: hidden
     static void setHomeAssistant(boolean on) { put("homeAssistant", on); }
 
-    static boolean quotes() { return sp().getBoolean("quotes", Config.SHOW_CRYPTO); }
+    static boolean quotes() { return false; }   // atel: no quotes widget
     static void setQuotes(boolean on) { put("quotes", on); }
 
     /** Your photos (Photos, sent from a computer) on the screensaver and behind the home screen, once imported. */
