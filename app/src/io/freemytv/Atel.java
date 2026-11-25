@@ -78,16 +78,18 @@ final class Atel {
 
     /** A line of the card, built once a minute (never while drawing). */
     static final class Row {
+        /** sub: the place, or for a reminder when it's due. badge: when, for the first line ("in 1 h 50"). */
         final String time, title, sub, badge;
-        final boolean check, strong;
+        final boolean check, strong, tomorrow;
 
-        Row(String time, String title, String sub, String badge, boolean check, boolean strong) {
+        Row(String time, String title, String sub, String badge, boolean check, boolean strong, boolean tomorrow) {
             this.time = time;
             this.title = title;
             this.sub = sub;
             this.badge = badge;
             this.check = check;
             this.strong = strong;
+            this.tomorrow = tomorrow;
         }
     }
 
@@ -162,21 +164,19 @@ final class Atel {
             if (e.start >= after) continue;
             boolean isTomorrow = e.start >= tomorrow;
             String time = e.allDay ? Ui.tr("atel|All day") : Ui.time(e.start);
-            String sub = isTomorrow
-                    ? (e.place.isEmpty() ? Ui.tr("tomorrow") : Ui.trf("atel|tomorrow · {place}", "place", e.place))
-                    : e.place;
             String badge;
             boolean strong = !isTomorrow;
             if (isTomorrow) badge = Ui.tr("tomorrow");
             else if (e.allDay) badge = Ui.tr("today");
             else if (e.start <= now) badge = Ui.tr("atel|now");
             else badge = Ui.trf("atel|in {time}", "time", duration(e.start - now));
-            out.add(new Row(time, e.title, sub, badge, false, strong));
+            out.add(new Row(time, e.title, e.place, badge, false, strong, isTomorrow));
         }
         for (Item r : a.reminders) {
             if (out.size() >= max) break;
             boolean soon = r.due < after;
-            out.add(new Row("", r.title, "", dueText(r.due, today, tomorrow), true, soon));
+            String due = dueText(r.due, today, tomorrow);
+            out.add(new Row("", r.title, due, due, true, soon, r.due >= tomorrow));
         }
         return out;
     }
