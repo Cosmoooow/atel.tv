@@ -1120,6 +1120,7 @@ public class SettingsActivity extends Activity {
             String top = Prefs.topContent();
             v[TOP_ROW] = top.equals(Prefs.TOP_CONTINUE) ? Ui.tr("Continue Watching")
                     : top.equals(Prefs.TOP_NONE) ? Ui.tr("Clock")
+                    : top.equals(Prefs.TOP_ATEL) ? "atel"
                     : Ui.tr("Picks");
             v[WATCH_ROW] = watchCount();
             String rec = Prefs.recents();

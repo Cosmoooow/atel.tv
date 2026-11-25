@@ -97,9 +97,10 @@ lan_server() {   # lan_server <key>: checks it; the host of an http:// one joins
 }
 lan_server immich_server
 lan_server home_assistant_url
+lan_server atel_server   # atel: the home server's read-only device API (atel/API-APPAREILS.md)
 # Keys that would let another app on the TV into the user's own servers stay out of the APK: tools/send_key.py sends
 # them to the TV (Secrets).
-for key in immich_api_key home_assistant_token; do
+for key in immich_api_key home_assistant_token atel_token; do
   if [ -n "$(prop "$key" '')" ]; then
     echo "config.properties: $key isn't built into the app (any app on the TV could read it there)." >&2
     echo "Send it to the TV instead (python3 tools/send_key.py <TV IP> $key), then remove it here." >&2
@@ -133,6 +134,7 @@ final class Config {
     static final String IMMICH_SERVER = "$(prop immich_server '')";
     static final String HA_URL = "$(prop home_assistant_url '')";
     static final String HA_ENTITIES = "$(prop home_assistant_entities '')";
+    static final String ATEL_SERVER = "$(prop atel_server '')";   // empty: the atel card shows sample data
     static final boolean HOME_ASSISTANT = $HA;   // home_assistant_url and _entities set: Home Settings shows its row
     static final boolean DISABLE_ASSISTANT = $ASSIST;
     static final boolean SHOW_CRYPTO = $CRYPTO;

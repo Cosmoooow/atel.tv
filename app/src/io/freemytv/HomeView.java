@@ -190,6 +190,21 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     // scrolls, Z_WATCH) or nothing. Its texts are measured once per list and its pictures decoded once (WatchArt), so
     // drawing the row costs no more than the picks.
     private String topMode = Prefs.TOP_PICKS;
+    // atel (this fork, Settings > Top of the screen > atel): the weather and today's agenda side by side, in the
+    // drawer cards' glass, with an amber dot before the agenda's title as atel's only mark. Its lines are built once a
+    // minute (refreshAtelText), never while drawing.
+    private static final float ATEL_TOP = 300, ATEL_H = 360, ATEL_ROWS = 3;
+    private final RectF atelWeather = new RectF(), atelToday = new RectF(), atelWeatherInner = new RectF();
+    private final String[] atelTimes = new String[3], atelTitles = new String[3], atelSubs = new String[3], atelBadges = new String[3];
+    private final boolean[] atelChecks = new boolean[3], atelStrong = new boolean[3];
+    private final float[] atelBadgeW = new float[3];
+    private int atelCount = -1;
+    private long atelMinute = -1;
+    private Atel.Agenda atelFrom;
+    private int atelGeneration = -1, atelPrefs = -1;
+    private float atelWidth;
+    private String atelGreeting = "", atelTitle = "", atelEmpty = "", atelSample = "";
+    private Paint atelTime, atelText, atelSub, atelBadge;
     private List<WatchNext.Item> watching = new ArrayList<>();
     private final Spring[] watchFocus = new Spring[WatchNext.MAX];
     private final Spring watchScroll = new Spring(0.32f, 1f, 0);
@@ -935,6 +950,12 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         lClock.setLetterSpacing(-0.01f);
         lWeather = Ui.text(Ui.medium, 34 * k, L_DIM);
         lClockQuote = Ui.numbers(Ui.medium, 28 * k, L_DIM);
+        atelTime = Ui.numbers(Ui.semibold, 32 * k, L_INK);
+        atelText = Ui.text(Ui.semibold, 29 * k, L_INK);
+        atelSub = Ui.text(Ui.medium, 22 * k, L_DIM);
+        atelBadge = Ui.text(Ui.semibold, 21 * k, L_INK);
+        atelBadge.setTextAlign(Paint.Align.CENTER);
+        atelCount = -1;   // new sizes: the lines are cut again
         lightGradient = tintShade = null;
         buttonPaint = Ui.text(Ui.semibold, 29 * k, INK);
         capsuleText = Ui.numbers(Ui.medium, 29 * k, 0xF2FFFFFF);
@@ -1055,7 +1076,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 refreshHero(false);
                 heroLayer.invalidate();
             }
-            if (clockMode()) heroLayer.invalidate();
+            if (clockMode() || atelMode()) heroLayer.invalidate();
+            if (atelMode()) Atel.refresh(getContext(), false, atelChanged);
         }
 
         // Busy: something is moving, or the sheet or the drawer is open.
@@ -2736,6 +2758,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             final List<HomeApps.Item> top = apps ? HomeApps.topButtons(c) : null;   // they change with Prefs too
             // Only read when it's shown: with the picks or the clock, Continue Watching costs nothing.
             final String mode = Prefs.topContent();
+            if (mode.equals(Prefs.TOP_ATEL)) Atel.refresh(c, false, atelChanged);
             final boolean allowed = WatchNext.allowed(c);
             final List<WatchNext.Item> w = mode.equals(Prefs.TOP_CONTINUE) ? WatchNext.load(c) : new ArrayList<>();
             handler.post(() -> {
@@ -4121,7 +4144,11 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     /** The clock, the date and the weather: nothing at the top, or picks without a TMDB key. */
     private boolean clockMode() {
-        return !picksMode() && !continueMode();
+        return !picksMode() && !continueMode() && !atelMode();
+    }
+
+    private boolean atelMode() {
+        return topMode.equals(Prefs.TOP_ATEL);
     }
 
     private boolean continueMode() {
@@ -4674,6 +4701,11 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             if (HomeData.coinCount() > 0 || playingTab != null) drawQuotes(c);
             return;
         }
+        if (atelMode()) {
+            drawAtelTop(c);
+            if (HomeData.coinCount() > 0 || playingTab != null) drawQuotes(c);
+            return;
+        }
         String hello = picksMode() ? Ui.tr("For You") : Ui.tr("Continue Watching");
         c.drawText(hello, MARGIN * k - Ui.leftBearing(lTitle, hello), L_TITLE_BASE * k, lTitle);
         titleRight = MARGIN * k + lTitle.measureText(hello);
@@ -4737,6 +4769,158 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         float sw = Symbols.width(getContext(), symbol, size);
         Symbols.draw(getContext(), c, symbol, x + sw / 2, base - Ui.halfCap(lWeather), size, lWeather.getColor());
         c.drawText(weatherLine, x + sw + 16 * k, base, lWeather);
+    }
+
+    // MARK: - atel (this fork): the weather and today's agenda at the top
+
+    /** A new agenda came from the server (on Atel's thread): redraw the top. */
+    private final Runnable atelChanged = () -> handler.post(this::atelArrived);
+
+    private void atelArrived() {
+        if (!running || !atelMode()) return;
+        heroDirty = true;
+        heroLayer.invalidate();
+        wake();
+    }
+
+    /** The two cards under the title, on the grid's halves, above the shelf. */
+    private void layoutAtel() {
+        float left = MARGIN * k, right = CONTENT_R * k, top = ATEL_TOP * k, bottom = (ATEL_TOP + ATEL_H) * k;
+        float mid = (left + right) / 2, gap = 20 * k;
+        boolean wx = Prefs.weather();
+        atelWeather.set(left, top, mid - gap, bottom);
+        atelToday.set(wx ? mid + gap : left, top, right, bottom);
+        snap(atelWeather);
+        snap(atelToday);
+        // The weather's own layout is made for the drawer's 300 px card: centred in the taller one.
+        float inset = (atelWeather.height() - CARDS_H * k) / 2;
+        atelWeatherInner.set(atelWeather.left, atelWeather.top + inset, atelWeather.right, atelWeather.bottom - inset);
+    }
+
+    /** The greeting, the card's title and its lines, once a minute or when the agenda, the language or a setting changed. */
+    private void refreshAtelText(long now) {
+        Atel.Agenda a = Atel.now();
+        long minute = now / 60_000;
+        if (minute == atelMinute && a == atelFrom && Ui.generation == atelGeneration && Prefs.version == atelPrefs
+                && atelWidth == atelToday.width() && atelCount >= 0) return;
+        atelMinute = minute;
+        atelFrom = a;
+        atelGeneration = Ui.generation;
+        atelPrefs = Prefs.version;
+        atelWidth = atelToday.width();
+        int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+        atelGreeting = hour >= 5 && hour < 12 ? Ui.tr("Good morning") : hour >= 12 && hour < 18 ? Ui.tr("Good afternoon") : Ui.tr("Good evening");
+        atelTitle = Ui.tr("Today");
+        atelEmpty = Atel.configured() && a.at == 0 ? Ui.tr("atel|Waiting for the atel server…") : Ui.tr("atel|Nothing planned");
+        atelSample = a.sample ? Ui.tr("atel|sample") : "";
+        List<Atel.Row> rows = Atel.rows(a, now, (int) ATEL_ROWS);
+        atelCount = rows.size();
+        float textLeft = 34 * k + 116 * k, textRight = atelToday.width() - 34 * k;
+        for (int i = 0; i < atelCount; i++) {
+            Atel.Row r = rows.get(i);
+            atelTimes[i] = r.time;
+            atelChecks[i] = r.check;
+            atelStrong[i] = r.strong;
+            atelBadges[i] = r.badge;
+            atelBadgeW[i] = atelBadge.measureText(r.badge) + 32 * k;
+            float room = textRight - textLeft - atelBadgeW[i] - 24 * k;
+            fitPaint.set(atelText);
+            atelTitles[i] = TextUtils.ellipsize(r.title, fitPaint, room, TextUtils.TruncateAt.END).toString();
+            fitPaint.set(atelSub);
+            atelSubs[i] = TextUtils.ellipsize(r.sub, fitPaint, room, TextUtils.TruncateAt.END).toString();
+        }
+    }
+
+    private void drawAtelTop(Canvas c) {
+        layoutAtel();
+        refreshAtelText(System.currentTimeMillis());
+        // "Good evening" and the date beside it, smaller, on the title's line.
+        float x = MARGIN * k, base = L_TITLE_BASE * k;
+        c.drawText(atelGreeting, x - Ui.leftBearing(lTitle, atelGreeting), base, lTitle);
+        float dx = x + lTitle.measureText(atelGreeting) + 22 * k;
+        c.drawText(dateText, dx, base, lDate);
+        titleRight = dx + lDate.measureText(dateText);
+        // The drawer cards' paints, in this layer's tone.
+        cardTitle.setColor(tone(L_DIM, 0xB3FFFFFF));
+        cardText.setColor(drawerInk(0.95f));
+        cardDim.setColor(tone(L_DIM, 0xADFFFFFF));
+        cardDimRight.setColor(tone(L_FAINT, 0x99FFFFFF));
+        bigTemp.setColor(drawerInk(1));
+        hourPaint.setColor(tone(L_DIM, 0xADFFFFFF));
+        hourTemp.setColor(drawerInk(0.95f));
+        dayLow.setColor(tone(L_DIM, 0xADFFFFFF));
+        if (Prefs.weather()) {
+            drawerCard(c, atelWeather);
+            drawWeather(c, atelWeatherInner);
+        }
+        drawAtelToday(c, atelToday);
+    }
+
+    /** "Aujourd'hui": up to three lines, time (or a box for a reminder), title and place, and when at the right. */
+    private void drawAtelToday(Canvas c, RectF r) {
+        drawerCard(c, r);
+        float x = r.left + 34 * k, right = r.right - 34 * k, titleBase = r.top + 54 * k;
+        // atel's only mark: a small amber dot before the title.
+        fill.setShader(null);
+        fill.setColor(0xFFF2C46D);
+        c.drawCircle(x + 6 * k, titleBase - Ui.halfCap(cardTitle), 6 * k, fill);
+        c.drawText(atelTitle, x + 22 * k, titleBase, cardTitle);
+        if (!atelSample.isEmpty()) c.drawText(atelSample, right, titleBase, cardDimRight);
+        int ink = drawerInk(0.95f), dim = tone(L_DIM, 0xADFFFFFF);
+        if (atelCount <= 0) {
+            cardDim.setColor(dim);
+            c.drawText(atelEmpty, x, r.top + 130 * k, cardDim);
+            return;
+        }
+        atelTime.setColor(ink);
+        atelText.setColor(ink);
+        atelSub.setColor(dim);
+        atelBadge.setColor(ink);
+        float rowsTop = r.top + 78 * k, rowH = (r.bottom - 18 * k - rowsTop) / ATEL_ROWS;
+        int line = tone(0x14000000, 0x1FFFFFFF);
+        for (int i = 0; i < atelCount; i++) {
+            float top = rowsTop + rowH * i, cy = top + rowH / 2;
+            if (i > 0) {
+                fill.setColor(line);
+                c.drawRect(x, top - k, right, top, fill);
+            }
+            if (atelChecks[i]) {
+                float s = 26 * k;
+                stroke(c, x + 2 * k, cy - s / 2, x + 2 * k + s, cy + s / 2, 6 * k, 3 * k, dim);
+            } else {
+                c.drawText(atelTimes[i], x, cy + Ui.halfCap(atelTime), atelTime);
+            }
+            float tx = x + 116 * k;
+            if (atelSubs[i].isEmpty()) {
+                c.drawText(atelTitles[i], tx, cy + Ui.halfCap(atelText), atelText);
+            } else {
+                c.drawText(atelTitles[i], tx, cy - 4 * k, atelText);
+                c.drawText(atelSubs[i], tx, cy + 28 * k, atelSub);
+            }
+            // When: a soft pill, or only an outline for what isn't today.
+            float bw = atelBadgeW[i], bh = 40 * k;
+            cell.set(right - bw, cy - bh / 2, right, cy + bh / 2);
+            if (atelStrong[i]) {
+                fill.setColor(tone(0x29787880, 0x33FFFFFF));
+                c.drawRoundRect(cell, bh / 2, bh / 2, fill);
+                atelBadge.setColor(ink);
+            } else {
+                stroke(c, cell.left, cell.top, cell.right, cell.bottom, bh / 2, 1.5f * k, tone(0x4D808088, 0x4DFFFFFF));
+                atelBadge.setColor(dim);
+            }
+            c.drawText(atelBadges[i], cell.centerX(), cy + Ui.halfCap(atelBadge), atelBadge);
+        }
+    }
+
+    /** An outlined rounded rectangle with the shared fill paint (restored to FILL after). */
+    private void stroke(Canvas c, float l, float t, float r, float b, float radius, float width, int color) {
+        fill.setShader(null);
+        fill.setStyle(Paint.Style.STROKE);
+        fill.setStrokeWidth(width);
+        fill.setColor(color);
+        tmp.set(l, t, r, b);
+        c.drawRoundRect(tmp, radius, radius, fill);
+        fill.setStyle(Paint.Style.FILL);
     }
 
     /**
@@ -4889,7 +5073,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         int color = Ui.alpha(tone(L_INK, 0xEBFFFFFF), 0.85f);
         float x = MARGIN * k;
         // The top title ("For You", or "Continue Watching") is on this line too: the icons start after it, not on it.
-        if (!clockMode()) x += lTitle.measureText(picksMode() ? Ui.tr("For You") : Ui.tr("Continue Watching")) + gap;
+        if (atelMode()) x = Math.max(x, titleRight + gap);
+        else if (!clockMode()) x += lTitle.measureText(picksMode() ? Ui.tr("For You") : Ui.tr("Continue Watching")) + gap;
         if (network != 0) x = drawStatusIcon(c, network == 2 ? "ethernet" : "wifi", x, height, gap, color);
         if (bluetoothConnected) x = drawStatusIcon(c, "bluetooth", x, height, gap, color);
         if (usbConnected) drawStatusIcon(c, "usb", x, height, gap, color);

@@ -15,6 +15,7 @@ arrived (never for the key itself). Android 9 and newer: adb's `content write` i
                    Home Assistant > your profile > Security > Long-lived access tokens (a user of its own that isn't an
                    administrator is safest). Checked against home_assistant_url first, when it's set, with what each of
                    home_assistant_entities becomes on the TV.
+  atel_token       atel > Paramètres > Appareils: the TV's read-only token for atel_server (the device API).
 """
 import getpass
 import json
@@ -28,7 +29,7 @@ import urllib.error
 import urllib.request
 
 URI = 'content://io.freemytv.secrets/'
-NAMES = ('immich_api_key', 'home_assistant_token')
+NAMES = ('immich_api_key', 'home_assistant_token', 'atel_token')
 SERIAL = []   # -s <ip>:5555 once connected, so a phone or another TV on adb doesn't get in the way
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
