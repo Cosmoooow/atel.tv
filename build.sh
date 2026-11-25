@@ -29,6 +29,10 @@ command -v "$JAVAC" >/dev/null 2>&1 || { echo "JDK not found. Install JDK 17 and
 CONFIG=config.properties
 if $GENERIC; then
   CONFIG=/dev/null   # every value at its default; the place comes from the TV's time zone (Place)
+  if [ -n "${ATEL_SERVER:-}" ]; then   # atel: the home server's address, from the CI's repository variable
+    CONFIG="$(mktemp)"
+    printf 'atel_server=%s\n' "$ATEL_SERVER" > "$CONFIG"
+  fi
 elif [ ! -f config.properties ]; then
   cp config.example.properties config.properties
   echo "Created config.properties: add your TMDB key and your city there (optional), then build again."
