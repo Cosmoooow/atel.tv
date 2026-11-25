@@ -137,6 +137,13 @@ final class Ui {
      */
     private static final List<String> RTL = Arrays.asList("ar", "he", "fa", "ur");
 
+    /** The name shown for the app (this fork: atel). Every "Free My TV" in the catalogues reads as this. */
+    static final String NAME = "atel";
+
+    static String brand(String s) {
+        return s.indexOf("Free My TV") < 0 ? s : s.replace("Free My TV", NAME);
+    }
+
     /** The text for this English key in the current language (the English itself when there is none). */
     static String tr(String english) {
         String s = catalogue.get(english);
@@ -250,13 +257,12 @@ final class Ui {
     /** The same for a setting ("auto", "fr"…) given by the caller (SleepOverlay gets it in its Intent). */
     static synchronized void applyLanguage(String setting) {
         String lang = resolve(setting);
-        Map<String, String> cat = Collections.emptyMap();
-        if (!lang.equals("en")) {
-            cat = load(lang);
-            if (cat == null) {
-                lang = "en";
-                cat = Collections.emptyMap();
-            }
+        // English loads its catalogue too, so its texts carry the app's name (brand).
+        Map<String, String> cat = load(lang);
+        if (cat == null) {
+            lang = "en";
+            cat = load("en");
+            if (cat == null) cat = Collections.emptyMap();
         }
         catalogue = cat;
         locale = localeOf(lang);
@@ -329,7 +335,7 @@ final class Ui {
             HashMap<String, String> map = new HashMap<>(o.length() * 2);
             for (java.util.Iterator<String> keys = o.keys(); keys.hasNext(); ) {
                 String key = keys.next();
-                map.put(key, o.getString(key));
+                map.put(key, brand(o.getString(key)));
             }
             return map;
         } catch (Exception e) {

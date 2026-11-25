@@ -1,5 +1,5 @@
 # ateltv: builds the APK for the TV on every pull request and push to main, and keeps it as a download on the run's
-# page (Artifacts > ateltv-apk). Built like the releases (--generic: the city from the TV's time zone, no TMDB key).
+# page (Artifacts > atel-tv-apk). Built like the releases (--generic: the city from the TV's time zone, no TMDB key).
 # Signing: with the repository secrets ATELTV_KEYSTORE_B64 (base64 of a keystore) and ATELTV_KEYSTORE_PASS, every
 # build has the same key and installs over the previous one; without them each build gets a throwaway key, so the
 # previous one must be uninstalled first.
@@ -42,8 +42,9 @@ jobs:
           else
             ./build.sh --generic
           fi
+          mv FreeMyTV.apk atel-tv.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: ateltv-apk
-          path: FreeMyTV.apk
+          name: atel-tv-apk
+          path: atel-tv.apk
           retention-days: 30
