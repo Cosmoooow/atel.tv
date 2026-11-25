@@ -195,19 +195,22 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     // up to three smaller lines along the rail, "Tomorrow" between the days. Its lines are built once a minute
     // (refreshAtelText), never while drawing.
     private static final int ATEL_ROWS = 4;
-    private static final float ATEL_WX_BASE = 200, ATEL_BIG_BASE = 340, ATEL_BIG_TITLE = 410, ATEL_STEP = 52;
+    // Four levels: the next appointment's title (80), when it is (40, the countdown in amber), the next lines (34),
+    // and the context in grey (the greeting, the weather, places, "TOMORROW").
+    private static final float ATEL_HELLO_BASE = 118, ATEL_WX_BASE = 184, ATEL_WHEN_BASE = 330, ATEL_WHAT_BASE = 412,
+            ATEL_WHERE_BASE = 462, ATEL_STEP = 48;
     private final String[] atelTimes = new String[ATEL_ROWS], atelTitles = new String[ATEL_ROWS], atelSubs = new String[ATEL_ROWS];
     private final boolean[] atelChecks = new boolean[ATEL_ROWS];
     private final float[] atelBase = new float[ATEL_ROWS];
     private int atelCount = -1;
     private boolean atelBig;   // the first line is an appointment, drawn large
-    private float atelSepBase, atelBadgeX, atelSubX;
+    private float atelSepBase, atelBadgeX;
     private long atelMinute = -1;
     private Atel.Agenda atelFrom;
     private int atelGeneration = -1, atelPrefs = -1;
     private long atelWeatherAt = -1;
     private String atelGreeting = "", atelEmpty = "", atelSample = "", atelBadge = "", atelSep = "", atelWeather = "";
-    private Paint atelBigTime, atelBigTitle, atelBigBadge, atelTime, atelText, atelSub, atelSepPaint;
+    private Paint atelHello, atelDate, atelWx, atelWhen, atelWhenBadge, atelWhat, atelWhere, atelTime, atelText, atelSub, atelSepPaint;
     private List<WatchNext.Item> watching = new ArrayList<>();
     private final Spring[] watchFocus = new Spring[WatchNext.MAX];
     private final Spring watchScroll = new Spring(0.32f, 1f, 0);
@@ -953,15 +956,20 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         lClock.setLetterSpacing(-0.01f);
         lWeather = Ui.text(Ui.medium, 34 * k, L_DIM);
         lClockQuote = Ui.numbers(Ui.medium, 28 * k, L_DIM);
-        atelBigTime = Ui.numbers(Ui.light, 110 * k, L_INK);
-        atelBigTime.setLetterSpacing(-0.02f);
-        atelBigTitle = Ui.text(Ui.semibold, 54 * k, L_INK);
-        atelBigBadge = Ui.text(Ui.semibold, 32 * k, L_INK);
-        atelTime = Ui.numbers(Ui.semibold, 34 * k, L_INK);
-        atelText = Ui.text(Ui.semibold, 34 * k, L_INK);
-        atelSub = Ui.text(Ui.medium, 27 * k, L_DIM);
-        atelSepPaint = Ui.text(Ui.semibold, 24 * k, L_DIM);
-        atelSepPaint.setLetterSpacing(0.06f);
+        atelHello = Ui.text(Ui.semibold, 56 * k, L_INK);
+        atelHello.setLetterSpacing(-0.02f);
+        atelDate = Ui.text(Ui.medium, 28 * k, L_DIM);
+        atelWx = Ui.text(Ui.medium, 26 * k, L_DIM);
+        atelWhen = Ui.numbers(Ui.semibold, 40 * k, L_INK);
+        atelWhenBadge = Ui.text(Ui.semibold, 32 * k, L_INK);
+        atelWhat = Ui.text(Ui.displaySemibold, 80 * k, L_INK);
+        atelWhat.setLetterSpacing(-0.03f);
+        atelWhere = Ui.text(Ui.regular, 30 * k, L_DIM);
+        atelTime = Ui.numbers(Ui.medium, 28 * k, L_DIM);
+        atelText = Ui.text(Ui.medium, 34 * k, L_INK);
+        atelSub = Ui.text(Ui.regular, 24 * k, L_FAINT);
+        atelSepPaint = Ui.text(Ui.semibold, 20 * k, L_FAINT);
+        atelSepPaint.setLetterSpacing(0.12f);
         atelCount = -1;   // new sizes: the lines are cut again
         lightGradient = tintShade = null;
         buttonPaint = Ui.text(Ui.semibold, 29 * k, INK);
@@ -4813,8 +4821,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         List<Atel.Row> rows = Atel.rows(a, now, ATEL_ROWS);
         atelCount = rows.size();
         atelBig = atelCount > 0 && !rows.get(0).check;
-        float left = (MARGIN + 64) * k, right = CONTENT_R * k;
-        float base = ATEL_BIG_BASE * k;
+        float left = (MARGIN + 64) * k, right = CONTENT_R * k, tx = left + 120 * k;
+        float base = (ATEL_WHEN_BASE - ATEL_STEP) * k;   // without a large first line, the small ones start there
         atelSepBase = -1;
         boolean today = false;
         for (int i = 0; i < atelCount; i++) {
@@ -4823,54 +4831,52 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             atelChecks[i] = r.check;
             if (i == 0 && atelBig) {
                 atelBadge = r.badge;
-                atelBadgeX = left + atelBigTime.measureText(r.time) + 32 * k;
-                fitPaint.set(atelBigTitle);
-                atelTitles[i] = TextUtils.ellipsize(r.title, fitPaint, right - left - 360 * k, TextUtils.TruncateAt.END).toString();
-                atelSubX = left + atelBigTitle.measureText(atelTitles[i]) + 28 * k;
-                fitPaint.set(atelSub);
-                fitPaint.setTextSize(32 * k);
-                atelSubs[i] = TextUtils.ellipsize(r.sub, fitPaint, Math.max(0, right - atelSubX), TextUtils.TruncateAt.END).toString();
-                atelBase[i] = base;
-                base = ATEL_BIG_TITLE * k;
+                atelBadgeX = left + atelWhen.measureText(r.time) + 18 * k;
+                fitPaint.set(atelWhat);
+                atelTitles[0] = TextUtils.ellipsize(r.title, fitPaint, right - left - 200 * k, TextUtils.TruncateAt.END).toString();
+                fitPaint.set(atelWhere);
+                atelSubs[0] = TextUtils.ellipsize(r.sub, fitPaint, right - left, TextUtils.TruncateAt.END).toString();
+                atelBase[0] = ATEL_WHEN_BASE * k;
+                base = (r.sub.isEmpty() ? ATEL_WHAT_BASE + 6 : ATEL_WHERE_BASE + 6) * k;
                 today = !r.tomorrow;
                 continue;
             }
-            // "Tomorrow" once, before the first line of tomorrow, when today's came first.
+            // "TOMORROW" once, before the first line of tomorrow, when today's came first.
             if (atelSepBase < 0 && today && r.tomorrow && !r.check) {
-                base += 56 * k;
-                atelSepBase = base;
-                base += 2 * k;
+                atelSepBase = base + 44 * k;
+                base = atelSepBase + 2 * k;
             }
-            base += (i == 0 ? 0 : ATEL_STEP * k) + (i == 1 && atelBig && atelSepBase < 0 ? 14 * k : 0);
-            if (i == 0) base = (ATEL_BIG_BASE - 60) * k;
+            base += ATEL_STEP * k;
             atelBase[i] = base;
-            float tx = left + 140 * k;
             fitPaint.set(atelText);
             atelTitles[i] = TextUtils.ellipsize(r.title, fitPaint, 900 * k, TextUtils.TruncateAt.END).toString();
             fitPaint.set(atelSub);
-            float sx = tx + atelText.measureText(atelTitles[i]) + 22 * k;
+            float sx = tx + atelText.measureText(atelTitles[i]) + 18 * k;
             atelSubs[i] = TextUtils.ellipsize(r.sub, fitPaint, Math.max(0, right - sx), TextUtils.TruncateAt.END).toString();
         }
     }
 
     private void drawAtelTop(Canvas c) {
         refreshAtelText(System.currentTimeMillis());
-        // "Good evening" and the date beside it, smaller, on the title's line.
-        float x = MARGIN * k, base = L_TITLE_BASE * k;
-        c.drawText(atelGreeting, x - Ui.leftBearing(lTitle, atelGreeting), base, lTitle);
-        float dx = x + lTitle.measureText(atelGreeting) + 22 * k;
-        c.drawText(dateText, dx, base, lDate);
-        titleRight = dx + lDate.measureText(dateText);
         int ink = tone(L_INK, WHITE), dim = tone(L_DIM, 0xADFFFFFF), faint = tone(L_FAINT, 0x80FFFFFF);
-        // The weather on one line under the greeting, as the clock's.
+        // "Good evening" and the date beside it, smaller than the other modes' titles: the agenda leads here.
+        float x = MARGIN * k, base = ATEL_HELLO_BASE * k;
+        atelHello.setColor(ink);
+        atelDate.setColor(dim);
+        c.drawText(atelGreeting, x - Ui.leftBearing(atelHello, atelGreeting), base, atelHello);
+        float dx = x + atelHello.measureText(atelGreeting) + 16 * k;
+        c.drawText(dateText, dx, base, atelDate);
+        titleRight = dx + atelDate.measureText(dateText);
+        // The weather on one line under the greeting.
         float wb = ATEL_WX_BASE * k;
         if (!atelWeather.isEmpty()) {
             HomeData.Weather wx = data.weather;
-            float size = 36 * k;
+            float size = 30 * k;
             String symbol = Symbols.weather(wx.code, wx.isDay);
             float sw = Symbols.width(getContext(), symbol, size);
-            Symbols.draw(getContext(), c, symbol, x + sw / 2, wb - Ui.halfCap(lWeather), size, lWeather.getColor());
-            c.drawText(atelWeather, x + sw + 16 * k, wb, lWeather);
+            atelWx.setColor(dim);
+            Symbols.draw(getContext(), c, symbol, x + sw / 2, wb - Ui.halfCap(atelWx), size, dim);
+            c.drawText(atelWeather, x + sw + 12 * k, wb, atelWx);
         }
         if (!atelSample.isEmpty()) {
             cardDimRight.setColor(faint);
@@ -4881,60 +4887,56 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     /** The timeline: a rail on the left, the next appointment large with the amber dot, the rest smaller. */
     private void drawAtelTimeline(Canvas c, int ink, int dim, int faint) {
-        float x = MARGIN * k, rail = x + 18 * k, left = (MARGIN + 64) * k;
+        float x = MARGIN * k, rail = x + 18 * k, left = (MARGIN + 64) * k, tx = left + 120 * k;
         int amber = tone(0xFFB8791C, 0xFFF2C46D), dot = tone(0xFFE0A23A, 0xFFF2C46D), line = tone(0x24000000, 0x24FFFFFF);
         fill.setShader(null);
         if (atelCount <= 0) {
             fill.setColor(dot);
-            c.drawCircle(rail, ATEL_BIG_TITLE * k - Ui.halfCap(atelBigTitle), 11 * k, fill);
-            atelBigTitle.setColor(dim);
-            c.drawText(atelEmpty, left, ATEL_BIG_TITLE * k, atelBigTitle);
+            c.drawCircle(rail, ATEL_WHAT_BASE * k - Ui.halfCap(atelWhat), 11 * k, fill);
+            atelWhat.setColor(dim);
+            c.drawText(atelEmpty, left, ATEL_WHAT_BASE * k, atelWhat);
             return;
         }
         float prev = -1;   // the bottom of the last dot: the rail runs between dots, with a little air
-        atelTime.setColor(ink);
+        atelTime.setColor(dim);
         atelText.setColor(ink);
-        atelSub.setColor(dim);
+        atelSub.setColor(faint);
         for (int i = 0; i < atelCount; i++) {
             float b = atelBase[i];
             if (i == 0 && atelBig) {
-                float cy = b - Ui.halfCap(atelBigTime);
+                float cy = b - Ui.halfCap(atelWhen);
                 prev = cy + 25 * k + 8 * k;
                 fill.setColor(Ui.alpha(dot, 0.22f));
                 c.drawCircle(rail, cy, 25 * k, fill);
                 fill.setColor(dot);
                 c.drawCircle(rail, cy, 15 * k, fill);
-                atelBigTime.setColor(ink);
-                c.drawText(atelTimes[0], left - Ui.leftBearing(atelBigTime, atelTimes[0]), b, atelBigTime);
-                atelBigBadge.setColor(amber);
-                c.drawText(atelBadge, atelBadgeX, b, atelBigBadge);
-                float tb = ATEL_BIG_TITLE * k;
-                atelBigTitle.setColor(ink);
-                c.drawText(atelTitles[0], left - Ui.leftBearing(atelBigTitle, atelTitles[0]), tb, atelBigTitle);
+                atelWhen.setColor(ink);
+                c.drawText(atelTimes[0], left - Ui.leftBearing(atelWhen, atelTimes[0]), b, atelWhen);
+                atelWhenBadge.setColor(amber);
+                c.drawText(atelBadge, atelBadgeX, b, atelWhenBadge);
+                atelWhat.setColor(ink);
+                c.drawText(atelTitles[0], left - Ui.leftBearing(atelWhat, atelTitles[0]), ATEL_WHAT_BASE * k, atelWhat);
                 if (!atelSubs[0].isEmpty()) {
-                    float size = atelSub.getTextSize();
-                    atelSub.setTextSize(32 * k);
-                    c.drawText(atelSubs[0], atelSubX, tb, atelSub);
-                    atelSub.setTextSize(size);
+                    atelWhere.setColor(dim);
+                    c.drawText(atelSubs[0], left, ATEL_WHERE_BASE * k, atelWhere);
                 }
                 continue;
             }
             float cy = b - Ui.halfCap(atelText), r = 9 * k;
-            // A small ring on the rail: round for an appointment, square for a reminder.
             if (prev > 0 && cy - r - 8 * k > prev) {
                 fill.setColor(line);
                 c.drawRect(rail - 1.5f * k, prev, rail + 1.5f * k, cy - r - 8 * k, fill);
             }
             prev = cy + r + 8 * k;
+            // A small ring on the rail: round for an appointment, square for a reminder.
             if (atelChecks[i]) stroke(c, rail - r, cy - r, rail + r, cy + r, 4 * k, 3 * k, faint);
             else stroke(c, rail - r, cy - r, rail + r, cy + r, r, 3 * k, faint);
             if (!atelChecks[i]) c.drawText(atelTimes[i], left, b, atelTime);
-            float tx = left + 140 * k;
             c.drawText(atelTitles[i], tx, b, atelText);
-            if (!atelSubs[i].isEmpty()) c.drawText(atelSubs[i], tx + atelText.measureText(atelTitles[i]) + 22 * k, b, atelSub);
+            if (!atelSubs[i].isEmpty()) c.drawText(atelSubs[i], tx + atelText.measureText(atelTitles[i]) + 18 * k, b, atelSub);
         }
         if (atelSepBase > 0) {
-            atelSepPaint.setColor(dim);
+            atelSepPaint.setColor(faint);
             c.drawText(atelSep, left, atelSepBase, atelSepPaint);
         }
     }
