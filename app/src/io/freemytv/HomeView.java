@@ -4846,8 +4846,9 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 today = !r.tomorrow;
                 continue;
             }
-            // "TOMORROW" once, before the first line of tomorrow, when today's came first.
+            // "TOMORROW" once, before the first line after today's (that day's date when it's later in the week).
             if (atelSepBase < 0 && today && r.tomorrow && !r.check) {
+                if (!r.day.isEmpty()) atelSep = r.day.toUpperCase(Ui.locale());
                 atelSepBase = base + 44 * k;
                 base = atelSepBase + 2 * k;
             }
