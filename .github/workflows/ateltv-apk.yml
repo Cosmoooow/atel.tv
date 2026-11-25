@@ -1,0 +1,50 @@
+# ateltv: builds the APK for the TV on every pull request and push to main, and keeps it as a download on the run's
+# page (Artifacts > atel-tv-apk). Built like the releases (--generic: the city from the TV's time zone, no TMDB key).
+# Signing: with the repository secrets ATELTV_KEYSTORE_B64 (base64 of a keystore) and ATELTV_KEYSTORE_PASS, every
+# build has the same key and installs over the previous one; without them each build gets a throwaway key, so the
+# previous one must be uninstalled first.
+name: ateltv APK
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ateltv-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Android SDK (build-tools 34, android-34)
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$RUNNER_TEMP/sdk" \
+            "build-tools;34.0.0" "platforms;android-34" > /dev/null
+          echo "ANDROID_HOME=$RUNNER_TEMP/sdk" >> "$GITHUB_ENV"
+      - name: Build
+        env:
+          KS_B64: ${{ secrets.ATELTV_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.ATELTV_KEYSTORE_PASS }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            printf '%s' "$KS_B64" | base64 -d > "$RUNNER_TEMP/ateltv.keystore"
+            FREEMYTV_KEYSTORE="$RUNNER_TEMP/ateltv.keystore" FREEMYTV_KEYSTORE_PASS="$KS_PASS" ./build.sh --generic
+          else
+            ./build.sh --generic
+          fi
+          mv FreeMyTV.apk atel-tv.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: atel-tv-apk
+          path: atel-tv.apk
+          retention-days: 30
